@@ -1,15 +1,59 @@
 import React, { useState, useRef } from 'react';
-import { View, StyleSheet, ActivityIndicator, Text } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, Text, PanResponder } from 'react-native';
 import { GLView } from 'expo-gl';
 import { Renderer } from 'expo-three';
 import * as THREE from 'three';
 import { loadAsync } from 'expo-three';
 import { Asset } from 'expo-asset';
 
+// ===== VARIABLES GLOBALES =====
+let scene, camera, renderer, modelRef;
+let rotationY = 0;
+let rotationX = 0;
+let targetRotationY = 0;
+let targetRotationX = 0;
+// ===== FIN VARIABLES =====
+
 const ModelViewer = ({ onMuscleClick }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [selectedMuscle, setSelectedMuscle] = useState(null);
+
+    // ===== PAN RESPONDER POUR LA ROTATION =====
+    const lastPosition = useRef({ x: 0, y: 0 });
+
+    const panResponder = useRef(
+        PanResponder.create({
+            onStartShouldSetPanResponder: () => true,
+            onMoveShouldSetPanResponder: () => true,
+            onPanResponderGrant: (evt, gestureState) => {
+                lastPosition.current = {
+                    x: gestureState.x0,
+                    y: gestureState.y0
+                };
+            },
+            onPanResponderMove: (evt, gestureState) => {
+                const deltaX = gestureState.moveX - lastPosition.current.x;
+                const deltaY = gestureState.moveY - lastPosition.current.y;
+
+                // Rotation du modèle (pas de la caméra)
+                targetRotationY += deltaX * 0.01;
+                targetRotationX -= deltaY * 0.01;
+
+                // Limiter la rotation verticale
+                targetRotationX = Math.max(-Math.PI / 2.5, Math.min(Math.PI / 2.5, targetRotationX));
+
+                lastPosition.current = {
+                    x: gestureState.moveX,
+                    y: gestureState.moveY
+                };
+            },
+            onPanResponderRelease: () => {
+                lastPosition.current = { x: 0, y: 0 };
+            },
+        })
+    ).current;
+    // ===== FIN PAN RESPONDER =====
 
     // Liste des muscles cliquables (tous sauf "corps")
     const CLICKABLE_MUSCLES = [
@@ -29,30 +73,31 @@ const ModelViewer = ({ onMuscleClick }) => {
     const onContextCreate = async (gl) => {
         try {
             // Configuration du renderer
-            const renderer = new Renderer({ gl });
+            renderer = new Renderer({ gl });
             renderer.setSize(gl.drawingBufferWidth, gl.drawingBufferHeight);
-            renderer.setClearColor(0x1f1f1f, 1); // Fond gris foncé Athlium
+            renderer.setClearColor(0x1f1f1f, 1);
 
             // Créer la scène
-            const scene = new THREE.Scene();
+            scene = new THREE.Scene();
 
-            // Créer la caméra
-            const camera = new THREE.PerspectiveCamera(
-                50,
+            // Créer la caméra (FIXE)
+            camera = new THREE.PerspectiveCamera(
+                75,
                 gl.drawingBufferWidth / gl.drawingBufferHeight,
                 0.1,
                 1000
             );
-            camera.position.set(0, 0, 8);
+            // La caméra reste FIXE à cette position
+            camera.position.set(0, 0, 4);
             camera.lookAt(0, 0, 0);
 
             // Lumières
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
             scene.add(ambientLight);
 
-            const directionalLight1 = new THREE.DirectionalLight(0xffffff, 0.5);
-            directionalLight1.position.set(5, 5, 5);
-            scene.add(directionalLight1);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(5, 5, 5);
+            scene.add(directionalLight);
 
             const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.3);
             directionalLight2.position.set(-5, 3, -5);
@@ -65,13 +110,51 @@ const ModelViewer = ({ onMuscleClick }) => {
 
             const model = await loadAsync(asset.localUri || asset.uri);
 
-            // Ajuster le modèle
-            model.scene.scale.set(0.15, 0.15, 0.15);
-            model.scene.position.set(-0.93, -1.9, 0);
+            // ===== CENTRAGE AUTOMATIQUE PARFAIT =====
 
-            scene.add(model.scene);
+            const box = new THREE.Box3().setFromObject(model.scene);
+            const center = box.getCenter(new THREE.Vector3());
+            const size = box.getSize(new THREE.Vector3());
 
-            // Parcourir tous les meshes et logger leurs noms
+            console.log('=== Informations du modèle ===');
+            console.log('Centre original:', center);
+            console.log('Taille:', size);
+
+            // Calculer l'échelle pour que le modèle occupe ~70% de l'écran
+            const maxDim = Math.max(size.x, size.y, size.z);
+            const scale = 3 / maxDim;
+            model.scene.scale.setScalar(scale);
+
+            // ⭐ CENTRER LE MODÈLE PARFAITEMENT SUR X, Y et Z
+            // Le modèle doit être à (0, 0, 0) pour être au centre de l'écran
+            model.scene.position.set(
+                -center.x * scale,  // Centre sur X
+                -center.y * scale,  // Centre sur Y
+                -center.z * scale   // Centre sur Z
+            );
+
+            console.log('Échelle appliquée:', scale);
+            console.log('Position finale du modèle:', model.scene.position);
+
+            // ===== FIN CENTRAGE AUTOMATIQUE =====
+
+            // ⭐ CRÉER UN GROUPE POUR LA ROTATION
+            // Le groupe sera au centre (0,0,0) et le modèle sera décalé dedans
+            const modelGroup = new THREE.Group();
+            modelGroup.position.set(0, 0, 0); // Le groupe est au centre
+
+            // Ajouter le modèle dans le groupe (avec son offset de centrage)
+            modelGroup.add(model.scene);
+
+            // Ajouter le GROUPE à la scène (pas le modèle directement)
+            scene.add(modelGroup);
+
+            // Sauvegarder la référence du GROUPE (pas du modèle)
+            modelRef = modelGroup;
+
+            console.log('✅ Groupe créé - Le modèle tournera autour de son centre');
+
+            // Parcourir tous les meshes
             console.log('=== Structure du modèle ===');
             const muscleMeshes = {};
 
@@ -79,17 +162,13 @@ const ModelViewer = ({ onMuscleClick }) => {
                 if (child.isMesh) {
                     console.log('Mesh trouvé:', child.name);
 
-                    // Stocker les muscles cliquables
                     if (CLICKABLE_MUSCLES.includes(child.name)) {
                         muscleMeshes[child.name] = child;
-
-                        // Sauvegarder la couleur/matériau original
                         child.userData.originalMaterial = child.material.clone();
                     }
 
-                    // Rendre "corps" semi-transparent (optionnel)
                     if (child.name === 'corps') {
-                        child.material.transparent = true;
+                        child.material.transparent = false;
                         child.material.opacity = 1;
                     }
                 }
@@ -99,28 +178,25 @@ const ModelViewer = ({ onMuscleClick }) => {
 
             setLoading(false);
 
-            // Variables pour la rotation
-            let isDragging = false;
-            let previousTouch = { x: 0, y: 0 };
-            let rotationY = 0;
-            let rotationX = 0;
-            const rotationSpeed = 0.005;
-
-            // Boucle de rendu
+            // Boucle de rendu avec rotation UNIQUEMENT DU MODÈLE
             const render = () => {
                 requestAnimationFrame(render);
 
-                // Appliquer la rotation
-                model.scene.rotation.y = rotationY;
-                model.scene.rotation.x = rotationX;
+                // Interpolation pour une rotation fluide
+                rotationY += (targetRotationY - rotationY) * 0.1;
+                rotationX += (targetRotationX - rotationX) * 0.1;
 
+                // ⭐ ROTATION DU MODÈLE (pas de la caméra)
+                if (modelRef) {
+                    modelRef.rotation.y = rotationY;
+                    modelRef.rotation.x = rotationX;
+                }
+
+                // La caméra reste FIXE
                 renderer.render(scene, camera);
                 gl.endFrameEXP();
             };
             render();
-
-            // Note: Les événements tactiles seront gérés dans la prochaine étape
-            // Pour l'instant, rotation automatique désactivée pour voir le modèle
 
         } catch (err) {
             console.error('Erreur 3D:', err);
@@ -146,6 +222,7 @@ const ModelViewer = ({ onMuscleClick }) => {
             <GLView
                 style={styles.glView}
                 onContextCreate={onContextCreate}
+                {...panResponder.panHandlers}
             />
             {selectedMuscle && (
                 <View style={styles.muscleInfo}>
