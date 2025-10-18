@@ -1,11 +1,13 @@
 import React, { useState, useRef } from 'react';
-import { View, StyleSheet, ActivityIndicator, Text, PixelRatio } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, Text, PixelRatio, TouchableOpacity } from 'react-native';
 import { GestureHandlerRootView, GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { GLView } from 'expo-gl';
 import { Renderer } from 'expo-three';
 import * as THREE from 'three';
 import { loadAsync } from 'expo-three';
 import { Asset } from 'expo-asset';
+import { supabase } from '../lib/supabase';
+import ExercisesModal from './ExercisesModal';
 
 // === VARIABLES GLOBALES ===
 let scene, camera, renderer, modelRef, modelGroup;
@@ -94,7 +96,72 @@ const ModelViewer = () => {
     const [error, setError] = useState(null);
     const [selectedMuscle, setSelectedMuscle] = useState(null);
 
+    // ⭐ NOUVEAUX ÉTATS
+    const [modalVisible, setModalVisible] = useState(false);
+    const [exercises, setExercises] = useState([]);
+    const [loadingExercises, setLoadingExercises] = useState(false);
+
     setSelectedMuscleCallback = setSelectedMuscle;
+
+    // ⭐ FONCTION POUR RÉCUPÉRER LES EXERCICES
+    const fetchExercises = async (muscleSlug) => {
+        try {
+            setLoadingExercises(true);
+            console.log('🔍 Récupération exercices pour:', muscleSlug);
+
+            // 1. Récupérer l'ID du muscle
+            const { data: muscleData, error: muscleError } = await supabase
+                .from('muscles')
+                .select('id')
+                .eq('slug', muscleSlug)
+                .single();
+
+            if (muscleError) throw muscleError;
+
+            console.log('✅ Muscle trouvé:', muscleData.id);
+
+            // 2. Récupérer les exercices liés à ce muscle
+            const { data: exercisesData, error: exercisesError } = await supabase
+                .from('muscle_exercises')
+                .select(`
+                is_primary,
+                exercises (
+                    id,
+                    name,
+                    description,
+                    difficulty,
+                    equipment
+                )
+            `)
+                .eq('muscle_id', muscleData.id);
+
+            if (exercisesError) throw exercisesError;
+
+            // 3. Formater les données
+            const formattedExercises = exercisesData.map(item => ({
+                ...item.exercises,
+                is_primary: item.is_primary
+            }));
+
+            // 4. Trier : exercices principaux en premier
+            formattedExercises.sort((a, b) => {
+                if (a.is_primary && !b.is_primary) return -1;
+                if (!a.is_primary && b.is_primary) return 1;
+                return 0;
+            });
+
+            console.log('✅ Exercices récupérés:', formattedExercises.length);
+            setExercises(formattedExercises);
+            setModalVisible(true);
+
+        } catch (error) {
+            console.error('❌ Erreur récupération exercices:', error);
+            setExercises([]);
+            setModalVisible(true); // Afficher quand même la modale (elle dira "aucun exercice")
+        } finally {
+            setLoadingExercises(false);
+        }
+    };
 
     const savedRotation = useRef({ x: 0, y: 0 });
     const savedPan = useRef({ x: 0, y: 0 });
@@ -255,8 +322,27 @@ const ModelViewer = () => {
                         <Text style={styles.muscleInfoText}>
                             💪 {selectedMuscle.replace(/-/g, ' ').toUpperCase()}
                         </Text>
+
+                        {/* ⭐ NOUVEAU BOUTON */}
+                        <TouchableOpacity
+                            style={styles.viewExercisesButton}
+                            onPress={() => fetchExercises(selectedMuscle)}
+                        >
+                            <Text style={styles.viewExercisesButtonText}>
+                                Voir les exercices →
+                            </Text>
+                        </TouchableOpacity>
                     </View>
                 )}
+
+                {/* ⭐ MODALE D'EXERCICES */}
+                <ExercisesModal
+                    isVisible={modalVisible}
+                    onClose={() => setModalVisible(false)}
+                    muscleName={selectedMuscle}
+                    exercises={exercises}
+                    loading={loadingExercises}
+                />
             </View>
         </GestureHandlerRootView>
     );
@@ -295,6 +381,19 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         textAlign: 'center',
         letterSpacing: 1,
+    },
+    viewExercisesButton: {
+        backgroundColor: '#673ab6',
+        borderRadius: 10,
+        paddingVertical: 12,
+        paddingHorizontal: 20,
+        marginTop: 12,
+        alignItems: 'center',
+    },
+    viewExercisesButtonText: {
+        color: '#ffffff',
+        fontSize: 16,
+        fontWeight: 'bold',
     },
 });
 
