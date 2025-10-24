@@ -1,27 +1,13 @@
-import React, { useState, useRef } from 'react';
-import { View, StyleSheet, ActivityIndicator, Text, PixelRatio, TouchableOpacity } from 'react-native';
-import { GestureHandlerRootView, GestureDetector, Gesture } from 'react-native-gesture-handler';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, StyleSheet, ActivityIndicator, Text, PixelRatio, TouchableOpacity, PanResponder, Alert } from 'react-native';
 import { GLView } from 'expo-gl';
 import { Renderer } from 'expo-three';
 import * as THREE from 'three';
 import { loadAsync } from 'expo-three';
 import { Asset } from 'expo-asset';
-import { supabase } from '../lib/supabase';
-import ExercisesModal from './ExercisesModal';
+import { COLORS } from '../constants/colors';
+import { LinearGradient } from 'expo-linear-gradient';
 
-// === VARIABLES GLOBALES ===
-let scene, camera, renderer, modelRef, modelGroup;
-let rotationY = 0, rotationX = 0;
-let targetRotationY = 0, targetRotationX = 0;
-let cameraZ = 4, targetCameraZ = 4;
-let panX = 0, panY = 0, targetPanX = 0, targetPanY = 0;
-
-let raycaster = null;
-let glWidth = 0, glHeight = 0;
-let muscleMeshes = {}, selectedMesh = null;
-let setSelectedMuscleCallback = null;
-
-// === MUSCLES CIBLABLES ===
 const CLICKABLE_MUSCLES = [
     'abdominaux-obliques',
     'avant-bras',
@@ -36,229 +22,273 @@ const CLICKABLE_MUSCLES = [
     'triceps',
 ];
 
-// === RAYCAST ===
-const performRaycast = (screenX, screenY) => {
-    if (!raycaster || !camera || !scene || glWidth === 0 || glHeight === 0) return;
-
-    const ratio = PixelRatio.get();
-    const xPx = screenX * ratio;
-    const yPx = screenY * ratio;
-
-    if (modelGroup) modelGroup.updateMatrixWorld(true);
-    scene.updateMatrixWorld(true);
-
-    const mouse = new THREE.Vector2();
-    mouse.x = (xPx / glWidth) * 2 - 1;
-    mouse.y = -(yPx / glHeight) * 2 + 1;
-
-    raycaster.setFromCamera(mouse, camera);
-    const intersects = raycaster.intersectObjects([modelGroup], true);
-
-    if (intersects.length > 0) {
-        for (let intersect of intersects) {
-            const mesh = intersect.object;
-            if (CLICKABLE_MUSCLES.includes(mesh.name)) {
-                handleMuscleClick(mesh);
-                return;
-            }
-        }
-    } else if (selectedMesh) {
-        resetMuscleHighlight();
-        if (setSelectedMuscleCallback) setSelectedMuscleCallback(null);
-    }
-};
-
-const handleMuscleClick = (mesh) => {
-    resetMuscleHighlight();
-
-    if (!mesh.userData.highlightMaterial) {
-        mesh.userData.highlightMaterial = mesh.material.clone();
-    }
-
-    mesh.material = mesh.userData.highlightMaterial;
-    mesh.material.emissive = new THREE.Color(0x52fa7c);
-    mesh.material.emissiveIntensity = 0.5;
-
-    selectedMesh = mesh;
-    if (setSelectedMuscleCallback) setSelectedMuscleCallback(mesh.name);
-};
-
-const resetMuscleHighlight = () => {
-    if (selectedMesh && selectedMesh.userData.originalMaterial) {
-        selectedMesh.material = selectedMesh.userData.originalMaterial;
-        selectedMesh = null;
-    }
-};
-
-// === COMPOSANT PRINCIPAL ===
-const ModelViewer = () => {
+const ModelViewer = ({ navigation }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [selectedMuscle, setSelectedMuscle] = useState(null);
 
-    // ⭐ NOUVEAUX ÉTATS
-    const [modalVisible, setModalVisible] = useState(false);
-    const [exercises, setExercises] = useState([]);
-    const [loadingExercises, setLoadingExercises] = useState(false);
+    const sceneRef = useRef(null);
+    const cameraRef = useRef(null);
+    const rendererRef = useRef(null);
+    const modelRef = useRef(null);
+    const modelGroupRef = useRef(null);
+    const raycasterRef = useRef(null);
+    const muscleMeshesRef = useRef({});
+    const selectedMeshRef = useRef(null);
+    const animationFrameRef = useRef(null);
 
-    setSelectedMuscleCallback = setSelectedMuscle;
+    const rotationRef = useRef({ x: 0, y: 0, targetX: 0, targetY: 0 });
+    const cameraZRef = useRef({ current: 4, target: 4 });
+    const panRef = useRef({ x: 0, y: 0, targetX: 0, targetY: 0 });
 
-    // ⭐ FONCTION POUR RÉCUPÉRER LES EXERCICES
-    const fetchExercises = async (muscleSlug) => {
-        try {
-            setLoadingExercises(true);
-            console.log('🔍 Récupération exercices pour:', muscleSlug);
+    const glViewRef = useRef(null);
+    const glDimensionsRef = useRef({ width: 0, height: 0 });
 
-            // 1. Récupérer l'ID du muscle
-            const { data: muscleData, error: muscleError } = await supabase
-                .from('muscles')
-                .select('id')
-                .eq('slug', muscleSlug)
-                .single();
+    useEffect(() => {
+        return () => {
+            if (animationFrameRef.current) {
+                cancelAnimationFrame(animationFrameRef.current);
+            }
 
-            if (muscleError) throw muscleError;
+            if (sceneRef.current) {
+                sceneRef.current.traverse((object) => {
+                    if (object.geometry) object.geometry.dispose();
+                    if (object.material) {
+                        if (Array.isArray(object.material)) {
+                            object.material.forEach(mat => mat.dispose());
+                        } else {
+                            object.material.dispose();
+                        }
+                    }
+                });
+            }
 
-            console.log('✅ Muscle trouvé:', muscleData.id);
+            if (rendererRef.current) {
+                rendererRef.current.dispose();
+            }
 
-            // 2. Récupérer les exercices liés à ce muscle
-            const { data: exercisesData, error: exercisesError } = await supabase
-                .from('muscle_exercises')
-                .select(`
-                is_primary,
-                exercises (
-                    id,
-                    name,
-                    description,
-                    difficulty,
-                    equipment
-                )
-            `)
-                .eq('muscle_id', muscleData.id);
+            console.log('🧹 ModelViewer cleaned up');
+        };
+    }, []);
 
-            if (exercisesError) throw exercisesError;
+    const performRaycast = (screenX, screenY) => {
+        if (!raycasterRef.current || !cameraRef.current || !sceneRef.current) return;
 
-            // 3. Formater les données
-            const formattedExercises = exercisesData.map(item => ({
-                ...item.exercises,
-                is_primary: item.is_primary
-            }));
+        const { width, height } = glDimensionsRef.current;
+        if (width === 0 || height === 0) return;
 
-            // 4. Trier : exercices principaux en premier
-            formattedExercises.sort((a, b) => {
-                if (a.is_primary && !b.is_primary) return -1;
-                if (!a.is_primary && b.is_primary) return 1;
-                return 0;
-            });
+        const ratio = PixelRatio.get();
+        const xPx = screenX * ratio;
+        const yPx = screenY * ratio;
 
-            console.log('✅ Exercices récupérés:', formattedExercises.length);
-            setExercises(formattedExercises);
-            setModalVisible(true);
+        if (modelGroupRef.current) modelGroupRef.current.updateMatrixWorld(true);
+        sceneRef.current.updateMatrixWorld(true);
 
-        } catch (error) {
-            console.error('❌ Erreur récupération exercices:', error);
-            setExercises([]);
-            setModalVisible(true); // Afficher quand même la modale (elle dira "aucun exercice")
-        } finally {
-            setLoadingExercises(false);
+        const mouse = new THREE.Vector2();
+        mouse.x = (xPx / width) * 2 - 1;
+        mouse.y = -(yPx / height) * 2 + 1;
+
+        raycasterRef.current.setFromCamera(mouse, cameraRef.current);
+        const intersects = raycasterRef.current.intersectObjects([modelGroupRef.current], true);
+
+        if (intersects.length > 0) {
+            for (let intersect of intersects) {
+                const mesh = intersect.object;
+                if (CLICKABLE_MUSCLES.includes(mesh.name)) {
+                    handleMuscleClick(mesh);
+                    return;
+                }
+            }
+        } else if (selectedMeshRef.current) {
+            resetMuscleHighlight();
+            setSelectedMuscle(null);
         }
+    };
+
+    const handleMuscleClick = (mesh) => {
+        resetMuscleHighlight();
+
+        if (!mesh.userData.highlightMaterial) {
+            mesh.userData.highlightMaterial = mesh.material.clone();
+        }
+
+        mesh.material = mesh.userData.highlightMaterial;
+        mesh.material.emissive = new THREE.Color(0x50FA7B);
+        mesh.material.emissiveIntensity = 0.5;
+
+        selectedMeshRef.current = mesh;
+        setSelectedMuscle(mesh.name);
+    };
+
+    const resetMuscleHighlight = () => {
+        if (selectedMeshRef.current && selectedMeshRef.current.userData.originalMaterial) {
+            selectedMeshRef.current.material = selectedMeshRef.current.userData.originalMaterial;
+            selectedMeshRef.current = null;
+        }
+    };
+
+    const navigateToExercises = (muscleSlug) => {
+        console.log('🔍 Navigation vers exercices pour:', muscleSlug);
+        navigation.navigate('ExercisesList', {
+            muscle: muscleSlug,
+            muscleName: selectedMuscle
+        });
     };
 
     const savedRotation = useRef({ x: 0, y: 0 });
     const savedPan = useRef({ x: 0, y: 0 });
     const savedScale = useRef(1);
+    const initialDistance = useRef(0);
 
-    // === GESTURES ===
-    const tapGesture = Gesture.Tap()
-        .maxDuration(250)
-        .numberOfTaps(1)
-        .onEnd((e) => performRaycast(e.x, e.y));
+    const panResponder = useRef(
+        PanResponder.create({
+            onStartShouldSetPanResponder: () => true,
+            onMoveShouldSetPanResponder: () => true,
 
-    const panGesture = Gesture.Pan()
-        .onStart(() => (savedRotation.current = { x: targetRotationX, y: targetRotationY }))
-        .onUpdate((e) => {
-            targetRotationY = savedRotation.current.y + e.translationX * 0.01;
-            targetRotationX = savedRotation.current.x - e.translationY * 0.01;
-            targetRotationX = Math.max(-Math.PI / 2.5, Math.min(Math.PI / 2.5, targetRotationX));
-        });
+            onPanResponderGrant: (evt, gestureState) => {
+                const touches = evt.nativeEvent.touches;
 
-    const pinchGesture = Gesture.Pinch()
-        .onStart(() => (savedScale.current = targetCameraZ))
-        .onUpdate((e) => {
-            const newZ = savedScale.current / e.scale;
-            targetCameraZ = Math.max(2, Math.min(8, newZ));
-        });
+                if (touches.length === 1) {
+                    savedRotation.current = {
+                        x: rotationRef.current.targetX,
+                        y: rotationRef.current.targetY
+                    };
+                } else if (touches.length === 2) {
+                    savedScale.current = cameraZRef.current.target;
+                    savedPan.current = {
+                        x: panRef.current.targetX,
+                        y: panRef.current.targetY
+                    };
 
-    const twoFingerPan = Gesture.Pan()
-        .minPointers(2)
-        .maxPointers(2)
-        .onStart(() => (savedPan.current = { x: targetPanX, y: targetPanY }))
-        .onUpdate((e) => {
-            targetPanX = savedPan.current.x + e.translationX * 0.003;
-            targetPanY = savedPan.current.y - e.translationY * 0.003;
-            targetPanX = Math.max(-2, Math.min(2, targetPanX));
-            targetPanY = Math.max(-2, Math.min(2, targetPanY));
-        });
+                    const dx = touches[0].pageX - touches[1].pageX;
+                    const dy = touches[0].pageY - touches[1].pageY;
+                    initialDistance.current = Math.sqrt(dx * dx + dy * dy);
+                }
+            },
 
-    const composed = Gesture.Race(tapGesture, Gesture.Simultaneous(pinchGesture, twoFingerPan), panGesture);
+            onPanResponderMove: (evt, gestureState) => {
+                const touches = evt.nativeEvent.touches;
 
-    // === INITIALISATION 3D ===
+                if (touches.length === 1) {
+                    rotationRef.current.targetY = savedRotation.current.y + gestureState.dx * 0.01;
+                    rotationRef.current.targetX = savedRotation.current.x - gestureState.dy * 0.01;
+                    rotationRef.current.targetX = Math.max(-Math.PI / 2.5, Math.min(Math.PI / 2.5, rotationRef.current.targetX));
+                } else if (touches.length === 2) {
+                    const dx = touches[0].pageX - touches[1].pageX;
+                    const dy = touches[0].pageY - touches[1].pageY;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    const scale = initialDistance.current / distance;
+                    const newZ = savedScale.current * scale;
+                    cameraZRef.current.target = Math.max(2, Math.min(8, newZ));
+
+                    panRef.current.targetX = savedPan.current.x + gestureState.dx * 0.003;
+                    panRef.current.targetY = savedPan.current.y - gestureState.dy * 0.003;
+                    panRef.current.targetX = Math.max(-2, Math.min(2, panRef.current.targetX));
+                    panRef.current.targetY = Math.max(-2, Math.min(2, panRef.current.targetY));
+                }
+            },
+
+            onPanResponderRelease: (evt, gestureState) => {
+                const touches = evt.nativeEvent.changedTouches;
+
+                if (touches.length === 1 && Math.abs(gestureState.dx) < 10 && Math.abs(gestureState.dy) < 10) {
+                    if (glViewRef.current) {
+                        glViewRef.current.measure((x, y, width, height, pageX, pageY) => {
+                            const touchX = touches[0].pageX;
+                            const touchY = touches[0].pageY;
+
+                            const relativeX = touchX - pageX;
+                            const relativeY = touchY - pageY;
+
+                            performRaycast(relativeX, relativeY);
+                        });
+                    }
+                }
+            },
+        })
+    ).current;
+
     const onContextCreate = async (gl) => {
         try {
-            glWidth = gl.drawingBufferWidth;
-            glHeight = gl.drawingBufferHeight;
+            glDimensionsRef.current = {
+                width: gl.drawingBufferWidth,
+                height: gl.drawingBufferHeight
+            };
 
-            renderer = new Renderer({ gl });
-            renderer.setSize(glWidth, glHeight);
-            renderer.setClearColor(0x1f1f1f, 1);
+            rendererRef.current = new Renderer({ gl });
+            rendererRef.current.setSize(glDimensionsRef.current.width, glDimensionsRef.current.height);
+            rendererRef.current.setClearColor(0x1E1E1E, 1);
 
-            scene = new THREE.Scene();
+            sceneRef.current = new THREE.Scene();
 
-            camera = new THREE.PerspectiveCamera(75, glWidth / glHeight, 0.1, 1000);
-            camera.position.z = cameraZ;
-            camera.lookAt(0, 0, 0);
+            cameraRef.current = new THREE.PerspectiveCamera(
+                75,
+                glDimensionsRef.current.width / glDimensionsRef.current.height,
+                0.1,
+                1000
+            );
+            cameraRef.current.position.z = cameraZRef.current.current;
+            cameraRef.current.lookAt(0, 0, 0);
 
-            raycaster = new THREE.Raycaster();
+            raycasterRef.current = new THREE.Raycaster();
 
-            scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+            sceneRef.current.add(new THREE.AmbientLight(0xffffff, 0.6));
             const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
             dirLight.position.set(5, 10, 5);
-            scene.add(dirLight);
+            sceneRef.current.add(dirLight);
 
-            const asset = Asset.fromModule(require('../assets/body-model.glb'));
-            await asset.downloadAsync();
+            // PROTECTION : Vérifier que le fichier existe
+            let asset;
+            try {
+                asset = Asset.fromModule(require('../assets/body-model.glb'));
+                if (!asset) {
+                    throw new Error('Fichier body-model.glb introuvable');
+                }
+                await asset.downloadAsync();
+            } catch (assetError) {
+                console.error('❌ Erreur chargement asset:', assetError);
+                throw new Error('Le fichier du modèle 3D est manquant. Ajoute body-model.glb dans le dossier assets/');
+            }
 
-            const loadedModel = await loadAsync(asset.uri || asset.localUri);
+            // PROTECTION : Vérifier que l'URI est valide
+            const uri = asset.uri || asset.localUri;
+            if (!uri || uri === 'undefined' || uri.trim() === '') {
+                throw new Error('URI du modèle 3D invalide');
+            }
 
-            // Centrage & mise à l’échelle
-            modelGroup = new THREE.Group();
-            scene.add(modelGroup);
+            console.log('✅ Chargement du modèle depuis:', uri);
 
-            modelRef = loadedModel.scene || loadedModel;
-            modelGroup.add(modelRef);
-            modelRef.updateMatrixWorld(true);
+            const loadedModel = await loadAsync(uri);
 
-            const box = new THREE.Box3().setFromObject(modelRef);
+            modelGroupRef.current = new THREE.Group();
+            sceneRef.current.add(modelGroupRef.current);
+
+            modelRef.current = loadedModel.scene || loadedModel;
+            modelGroupRef.current.add(modelRef.current);
+            modelRef.current.updateMatrixWorld(true);
+
+            const box = new THREE.Box3().setFromObject(modelRef.current);
             const center = box.getCenter(new THREE.Vector3());
             const size = box.getSize(new THREE.Vector3());
             const maxDim = Math.max(size.x, size.y, size.z) || 1;
 
             const scale = 3 / maxDim;
-            modelRef.scale.setScalar(scale);
-            modelRef.position.set(-center.x * scale, -center.y * scale, -center.z * scale);
+            modelRef.current.scale.setScalar(scale);
+            modelRef.current.position.set(-center.x * scale, -center.y * scale, -center.z * scale);
 
-            modelRef.updateMatrixWorld(true);
-            modelGroup.position.set(0, 0, 0);
+            modelRef.current.updateMatrixWorld(true);
+            modelGroupRef.current.position.set(0, 0, 0);
 
-            targetRotationY = rotationY = Math.PI;
-            modelGroup.rotation.y = Math.PI;
+            rotationRef.current = { x: 0, y: 0, targetX: 0, targetY: 0 };
+            modelGroupRef.current.rotation.y = 0;
 
-            // Activation des muscles cliquables
-            muscleMeshes = {};
-            modelRef.traverse((child) => {
+            muscleMeshesRef.current = {};
+            modelRef.current.traverse((child) => {
                 if (child.isMesh) {
                     child.raycast = THREE.Mesh.prototype.raycast;
                     if (CLICKABLE_MUSCLES.includes(child.name)) {
-                        muscleMeshes[child.name] = child;
+                        muscleMeshesRef.current[child.name] = child;
                         child.userData.originalMaterial = child.material.clone();
                     }
                 }
@@ -266,134 +296,215 @@ const ModelViewer = () => {
 
             setLoading(false);
 
-            // === RENDER LOOP ===
             const render = () => {
-                requestAnimationFrame(render);
+                animationFrameRef.current = requestAnimationFrame(render);
 
-                rotationY += (targetRotationY - rotationY) * 0.1;
-                rotationX += (targetRotationX - rotationX) * 0.1;
-                cameraZ += (targetCameraZ - cameraZ) * 0.1;
-                panX += (targetPanX - panX) * 0.1;
-                panY += (targetPanY - panY) * 0.1;
+                rotationRef.current.y += (rotationRef.current.targetY - rotationRef.current.y) * 0.1;
+                rotationRef.current.x += (rotationRef.current.targetX - rotationRef.current.x) * 0.1;
+                cameraZRef.current.current += (cameraZRef.current.target - cameraZRef.current.current) * 0.1;
+                panRef.current.x += (panRef.current.targetX - panRef.current.x) * 0.1;
+                panRef.current.y += (panRef.current.targetY - panRef.current.y) * 0.1;
 
-                if (modelGroup) {
-                    modelGroup.rotation.y = rotationY;
-                    modelGroup.rotation.x = rotationX;
-                    modelGroup.position.x = panX;
-                    modelGroup.position.y = panY;
+                if (modelGroupRef.current) {
+                    modelGroupRef.current.rotation.y = rotationRef.current.y;
+                    modelGroupRef.current.rotation.x = rotationRef.current.x;
+                    modelGroupRef.current.position.x = panRef.current.x;
+                    modelGroupRef.current.position.y = panRef.current.y;
                 }
 
-                if (camera) camera.position.z = cameraZ;
+                if (cameraRef.current) {
+                    cameraRef.current.position.z = cameraZRef.current.current;
+                }
 
-                renderer.render(scene, camera);
+                rendererRef.current.render(sceneRef.current, cameraRef.current);
                 gl.endFrameEXP();
             };
             render();
         } catch (err) {
-            console.error('Erreur 3D:', err);
-            setError(`Erreur de chargement: ${err.message}\nVérifiez le chemin du fichier body-model.glb`);
+            console.error('❌ Erreur 3D:', err);
+            setError(err.message || 'Erreur de chargement du modèle 3D');
             setLoading(false);
         }
     };
 
-    // === RENDER REACT ===
     return (
-        <GestureHandlerRootView style={styles.container}>
-            <View style={styles.container}>
-                {loading && (
-                    <View style={styles.overlay}>
-                        <ActivityIndicator size="large" color="#52fa7c" />
-                        <Text style={styles.loadingText}>Chargement du modèle 3D...</Text>
-                    </View>
-                )}
-                {error && (
-                    <View style={styles.overlay}>
-                        <Text style={styles.errorText}>Erreur de chargement</Text>
-                        <Text style={styles.errorDetails}>{error}</Text>
-                    </View>
-                )}
+        <View style={styles.container}>
+            {loading && (
+                <View style={styles.overlay}>
+                    <ActivityIndicator size="large" color={COLORS.accent} />
+                    <Text style={styles.loadingText}>Chargement du modèle 3D...</Text>
+                </View>
+            )}
+            {error && (
+                <View style={styles.overlay}>
+                    <Text style={styles.errorIcon}>⚠️</Text>
+                    <Text style={styles.errorText}>Erreur de chargement</Text>
+                    <Text style={styles.errorDetails}>{error}</Text>
+                    <TouchableOpacity
+                        style={styles.retryButton}
+                        onPress={() => {
+                            setError(null);
+                            setLoading(true);
+                            // Recharger
+                            setTimeout(() => {
+                                navigation.replace('Home');
+                            }, 100);
+                        }}
+                    >
+                        <Text style={styles.retryButtonText}>🔄 Réessayer</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
 
-                <GestureDetector gesture={composed}>
-                    <GLView style={styles.glView} onContextCreate={onContextCreate} />
-                </GestureDetector>
+            {!error && (
+                <View
+                    ref={glViewRef}
+                    style={styles.glView}
+                    {...panResponder.panHandlers}
+                >
+                    <GLView style={{ flex: 1 }} onContextCreate={onContextCreate} />
+                </View>
+            )}
 
-                {selectedMuscle && (
-                    <View style={styles.muscleInfo}>
-                        <Text style={styles.muscleInfoText}>
-                            💪 {selectedMuscle.replace(/-/g, ' ').toUpperCase()}
-                        </Text>
-
-                        {/* ⭐ NOUVEAU BOUTON */}
-                        <TouchableOpacity
-                            style={styles.viewExercisesButton}
-                            onPress={() => fetchExercises(selectedMuscle)}
+            {selectedMuscle && !error && (
+                <View style={styles.muscleInfoOuterGlow}>
+                    <View style={styles.muscleInfoInnerGlow}>
+                        <LinearGradient
+                            colors={[COLORS.primary, COLORS.primaryDark]}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={styles.muscleInfo}
                         >
-                            <Text style={styles.viewExercisesButtonText}>
-                                Voir les exercices →
+                            <Text style={styles.muscleInfoText}>
+                                💪 {selectedMuscle.replace(/-/g, ' ').toUpperCase()}
                             </Text>
-                        </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.viewExercisesButton}
+                                onPress={() => navigateToExercises(selectedMuscle)}
+                            >
+                                <Text style={styles.viewExercisesButtonText}>
+                                    Voir les exercices →
+                                </Text>
+                            </TouchableOpacity>
+                        </LinearGradient>
                     </View>
-                )}
-
-                {/* ⭐ MODALE D'EXERCICES */}
-                <ExercisesModal
-                    isVisible={modalVisible}
-                    onClose={() => setModalVisible(false)}
-                    muscleName={selectedMuscle}
-                    exercises={exercises}
-                    loading={loadingExercises}
-                />
-            </View>
-        </GestureHandlerRootView>
+                </View>
+            )}
+        </View>
     );
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#1f1f1f' },
-    glView: { flex: 1 },
+    container: {
+        flex: 1,
+        backgroundColor: COLORS.background
+    },
+    glView: {
+        flex: 1
+    },
     overlay: {
         ...StyleSheet.absoluteFillObject,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#1f1f1f',
+        backgroundColor: COLORS.background,
         zIndex: 10,
+        padding: 20,
     },
-    loadingText: { color: '#52fa7c', marginTop: 10, fontSize: 16 },
-    errorText: { color: '#ff5252', fontSize: 18, fontWeight: 'bold', marginBottom: 8 },
-    errorDetails: { color: '#ff8a80', fontSize: 14, textAlign: 'center', paddingHorizontal: 16 },
-    muscleInfo: {
+    loadingText: {
+        color: COLORS.accent,
+        marginTop: 10,
+        fontSize: 16
+    },
+    errorIcon: {
+        fontSize: 60,
+        marginBottom: 20,
+    },
+    errorText: {
+        color: COLORS.error,
+        fontSize: 20,
+        fontWeight: 'bold',
+        marginBottom: 10,
+        textAlign: 'center',
+    },
+    errorDetails: {
+        color: COLORS.textSecondary,
+        fontSize: 14,
+        textAlign: 'center',
+        paddingHorizontal: 20,
+        marginBottom: 20,
+    },
+    retryButton: {
+        backgroundColor: COLORS.primary,
+        paddingHorizontal: 30,
+        paddingVertical: 12,
+        borderRadius: 10,
+        borderWidth: 2,
+        borderColor: COLORS.accent,
+    },
+    retryButtonText: {
+        color: COLORS.text,
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    muscleInfoOuterGlow: {
         position: 'absolute',
         bottom: 30,
         left: 20,
         right: 20,
-        backgroundColor: 'rgba(82, 250, 124, 0.95)',
+        borderRadius: 18,
+        backgroundColor: 'transparent',
+        shadowColor: COLORS.accent,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.95,
+        shadowRadius: 30,
+        elevation: 25,
+    },
+    muscleInfoInnerGlow: {
+        borderRadius: 16,
+        backgroundColor: 'transparent',
+        shadowColor: COLORS.primary,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.8,
+        shadowRadius: 15,
+        elevation: 20,
+    },
+    muscleInfo: {
         padding: 18,
         borderRadius: 15,
-        shadowColor: '#52fa7c',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 8,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: 'rgba(80, 250, 123, 0.3)',
     },
     muscleInfoText: {
-        color: '#1f1f1f',
+        color: COLORS.text,
         fontSize: 18,
         fontWeight: 'bold',
         textAlign: 'center',
         letterSpacing: 1,
+        textShadowColor: COLORS.accent,
+        textShadowOffset: { width: 0, height: 0 },
+        textShadowRadius: 10,
     },
     viewExercisesButton: {
-        backgroundColor: '#673ab6',
+        backgroundColor: COLORS.secondary,
         borderRadius: 10,
         paddingVertical: 12,
         paddingHorizontal: 20,
         marginTop: 12,
         alignItems: 'center',
+        shadowColor: COLORS.secondary,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.6,
+        shadowRadius: 10,
+        elevation: 8,
     },
     viewExercisesButtonText: {
         color: '#ffffff',
         fontSize: 16,
         fontWeight: 'bold',
+        textShadowColor: 'rgba(0, 0, 0, 0.5)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 3,
     },
 });
 
