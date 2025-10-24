@@ -1,8 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import Modal from 'react-native-modal';
+import { COLORS } from '../constants/colors';
 
-const ExercisesModal = ({ isVisible, onClose, muscleName, exercises, loading }) => {
+const ExercisesModal = ({ isVisible, onClose, muscleName, exercises, loading, navigation }) => {
     return (
         <Modal
             isVisible={isVisible}
@@ -39,7 +40,15 @@ const ExercisesModal = ({ isVisible, onClose, muscleName, exercises, loading }) 
                         </View>
                     ) : (
                         exercises.map((exercise, index) => (
-                            <View key={exercise.id || index} style={styles.exerciseCard}>
+                            <TouchableOpacity
+                                key={exercise.id || index}
+                                style={styles.exerciseCard}
+                                onPress={() => {
+                                    onClose(); // Fermer la modale
+                                    navigation.navigate('ExerciseDetail', { exercise }); // Naviguer vers le détail
+                                }}
+                                activeOpacity={0.8}
+                            >
                                 {/* Nom de l'exercice */}
                                 <Text style={styles.exerciseName}>{exercise.name}</Text>
 
@@ -72,7 +81,12 @@ const ExercisesModal = ({ isVisible, onClose, muscleName, exercises, loading }) 
                                         {exercise.description}
                                     </Text>
                                 )}
-                            </View>
+
+                                {/* Indicateur cliquable */}
+                                <View style={styles.clickIndicator}>
+                                    <Text style={styles.clickIndicatorText}>Voir les détails →</Text>
+                                </View>
+                            </TouchableOpacity>
                         ))
                     )}
                 </ScrollView>
@@ -92,7 +106,7 @@ const styles = StyleSheet.create({
         margin: 0,
     },
     modalContent: {
-        backgroundColor: '#1f1f1f',
+        backgroundColor: COLORS.background,
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
         paddingTop: 12,
@@ -103,7 +117,7 @@ const styles = StyleSheet.create({
     dragBar: {
         width: 40,
         height: 4,
-        backgroundColor: '#52fa7c',
+        backgroundColor: COLORS.accent,
         borderRadius: 2,
         alignSelf: 'center',
         marginBottom: 16,
@@ -111,13 +125,13 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 24,
         fontWeight: 'bold',
-        color: '#52fa7c',
+        color: COLORS.accent,
         textAlign: 'center',
         marginBottom: 8,
     },
     subtitle: {
         fontSize: 14,
-        color: '#ccd4ff',
+        color: COLORS.text,
         textAlign: 'center',
         marginBottom: 20,
         opacity: 0.8,
@@ -126,7 +140,7 @@ const styles = StyleSheet.create({
         maxHeight: 400,
     },
     loadingText: {
-        color: '#ccd4ff',
+        color: COLORS.text,
         textAlign: 'center',
         fontSize: 16,
         marginVertical: 40,
@@ -136,24 +150,24 @@ const styles = StyleSheet.create({
         paddingVertical: 40,
     },
     emptyText: {
-        color: '#ccd4ff',
+        color: COLORS.text,
         fontSize: 18,
         fontWeight: 'bold',
         marginBottom: 8,
     },
     emptySubtext: {
-        color: '#ccd4ff',
+        color: COLORS.text,
         fontSize: 14,
         opacity: 0.6,
         textAlign: 'center',
     },
     exerciseCard: {
-        backgroundColor: '#2a2a2a',
+        backgroundColor: COLORS.backgroundCard,
         borderRadius: 12,
         padding: 16,
         marginBottom: 12,
         borderLeftWidth: 4,
-        borderLeftColor: '#52fa7c',
+        borderLeftColor: COLORS.accent,
     },
     exerciseName: {
         fontSize: 18,
@@ -166,29 +180,29 @@ const styles = StyleSheet.create({
     },
     difficultyBadge: {
         fontSize: 14,
-        color: '#ccd4ff',
+        color: COLORS.text,
         fontWeight: '600',
     },
     muscleType: {
         fontSize: 13,
-        color: '#ccd4ff',
+        color: COLORS.text,
         opacity: 0.9,
     },
     equipment: {
         fontSize: 13,
-        color: '#ccd4ff',
+        color: COLORS.text,
         marginTop: 4,
         opacity: 0.8,
     },
     description: {
         fontSize: 13,
-        color: '#ccd4ff',
+        color: COLORS.text,
         marginTop: 8,
         lineHeight: 18,
         opacity: 0.7,
     },
     closeButton: {
-        backgroundColor: '#673ab6',
+        backgroundColor: COLORS.secondary,
         borderRadius: 12,
         paddingVertical: 14,
         marginTop: 16,
@@ -197,6 +211,18 @@ const styles = StyleSheet.create({
     closeButtonText: {
         color: '#ffffff',
         fontSize: 16,
+        fontWeight: 'bold',
+    },
+    clickIndicator: {
+        marginTop: 12,
+        paddingTop: 12,
+        borderTopWidth: 1,
+        borderTopColor: COLORS.accent,
+        alignItems: 'flex-end',
+    },
+    clickIndicatorText: {
+        color: COLORS.accent,
+        fontSize: 13,
         fontWeight: 'bold',
     },
 });
