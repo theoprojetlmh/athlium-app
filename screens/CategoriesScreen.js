@@ -1,8 +1,11 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView } from 'react-native';
 import { COLORS } from '../constants/colors';
+import { useResponsive } from '../hooks/useResponsive';
 
 const CategoriesScreen = ({ navigation }) => {
+    const { fontSize, padding, scale } = useResponsive();
+
     const categories = [
         {
             id: 'equipment',
@@ -33,43 +36,52 @@ const CategoriesScreen = ({ navigation }) => {
 
     return (
         <SafeAreaView style={styles.container}>
-            <ScrollView contentContainerStyle={styles.scrollContent}>
-                <Text style={styles.title}>Explorer les exercices</Text>
-                <Text style={styles.subtitle}>Choisissez votre type d'entraînement</Text>
+            <ScrollView contentContainerStyle={[styles.scrollContent, { padding: padding.md }]}>
+                <Text style={[styles.title, { fontSize: fontSize.xxxl }]}>Explorer les exercices</Text>
+                <Text style={[styles.subtitle, { fontSize: fontSize.md, marginBottom: padding.lg }]}>
+                    Choisissez votre type d'entraînement
+                </Text>
 
                 {categories.map((category) => (
                     <TouchableOpacity
                         key={category.id}
-                        style={[styles.categoryCard, { borderColor: category.color }]}
+                        style={[styles.categoryCard, {
+                            borderColor: category.color,
+                            padding: padding.md,
+                            marginBottom: padding.sm
+                        }]}
                         onPress={() => handleCategoryPress(category.id)}
                         activeOpacity={0.7}
                     >
-                        <Text style={styles.categoryIcon}>{category.icon}</Text>
+                        <Text style={[styles.categoryIcon, { fontSize: scale(40) }]}>{category.icon}</Text>
                         <View style={styles.categoryInfo}>
-                            <Text style={styles.categoryTitle}>{category.title}</Text>
-                            <Text style={styles.categorySubtitle}>{category.subtitle}</Text>
+                            <Text style={[styles.categoryTitle, { fontSize: fontSize.xl }]}>{category.title}</Text>
+                            <Text style={[styles.categorySubtitle, { fontSize: fontSize.sm }]}>{category.subtitle}</Text>
                         </View>
-                        <Text style={styles.arrow}>→</Text>
+                        <Text style={[styles.arrow, { fontSize: fontSize.xxl }]}>→</Text>
                     </TouchableOpacity>
                 ))}
 
-                <View style={styles.divider}>
+                <View style={[styles.divider, { marginVertical: padding.lg }]}>
                     <View style={styles.dividerLine} />
-                    <Text style={styles.dividerText}>OU</Text>
+                    <Text style={[styles.dividerText, { fontSize: fontSize.sm, marginHorizontal: padding.sm }]}>OU</Text>
                     <View style={styles.dividerLine} />
                 </View>
 
                 <TouchableOpacity
-                    style={styles.modelButton}
+                    style={[styles.modelButton, {
+                        padding: padding.md,
+                        borderColor: COLORS.accent
+                    }]}
                     onPress={() => navigation.navigate('Home')}
                     activeOpacity={0.7}
                 >
-                    <Text style={styles.modelIcon}>🧘</Text>
+                    <Text style={[styles.modelIcon, { fontSize: scale(40) }]}>🧘</Text>
                     <View style={styles.categoryInfo}>
-                        <Text style={styles.categoryTitle}>Modèle 3D</Text>
-                        <Text style={styles.categorySubtitle}>Explorer par muscle</Text>
+                        <Text style={[styles.categoryTitle, { fontSize: fontSize.xl }]}>Modèle 3D</Text>
+                        <Text style={[styles.categorySubtitle, { fontSize: fontSize.sm }]}>Explorer par muscle</Text>
                     </View>
-                    <Text style={styles.arrow}>→</Text>
+                    <Text style={[styles.arrow, { fontSize: fontSize.xxl }]}>→</Text>
                 </TouchableOpacity>
             </ScrollView>
         </SafeAreaView>
@@ -82,26 +94,22 @@ const styles = StyleSheet.create({
         backgroundColor: COLORS.background,
     },
     scrollContent: {
-        padding: 20,
+        // padding géré dynamiquement
     },
     title: {
-        fontSize: 32,
         fontWeight: 'bold',
         color: COLORS.text,
         marginBottom: 8,
     },
     subtitle: {
-        fontSize: 16,
         color: COLORS.textSecondary,
-        marginBottom: 30,
+        // fontSize et marginBottom gérés dynamiquement
     },
     categoryCard: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: COLORS.backgroundCard,
-        padding: 20,
         borderRadius: 15,
-        marginBottom: 15,
         borderWidth: 2,
         shadowColor: COLORS.primary,
         shadowOffset: { width: 0, height: 4 },
@@ -110,30 +118,25 @@ const styles = StyleSheet.create({
         elevation: 5,
     },
     categoryIcon: {
-        fontSize: 40,
         marginRight: 15,
     },
     categoryInfo: {
         flex: 1,
     },
     categoryTitle: {
-        fontSize: 20,
         fontWeight: 'bold',
         color: COLORS.text,
         marginBottom: 4,
     },
     categorySubtitle: {
-        fontSize: 14,
         color: COLORS.textSecondary,
     },
     arrow: {
-        fontSize: 24,
         color: COLORS.text,
     },
     divider: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginVertical: 25,
     },
     dividerLine: {
         flex: 1,
@@ -142,8 +145,6 @@ const styles = StyleSheet.create({
         opacity: 0.3,
     },
     dividerText: {
-        marginHorizontal: 15,
-        fontSize: 14,
         color: COLORS.textSecondary,
         fontWeight: 'bold',
     },
@@ -151,10 +152,8 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: COLORS.backgroundCard,
-        padding: 20,
         borderRadius: 15,
         borderWidth: 2,
-        borderColor: COLORS.accent,
         shadowColor: COLORS.accent,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
@@ -162,7 +161,6 @@ const styles = StyleSheet.create({
         elevation: 5,
     },
     modelIcon: {
-        fontSize: 40,
         marginRight: 15,
     },
 });

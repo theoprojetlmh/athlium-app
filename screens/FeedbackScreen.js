@@ -14,8 +14,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { COLORS } from '../constants/colors';
+import { useResponsive } from '../hooks/useResponsive';
 
 const FeedbackScreen = ({ navigation }) => {
+    const { fontSize, padding } = useResponsive();
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [type, setType] = useState('suggestion');
@@ -91,33 +93,34 @@ const FeedbackScreen = ({ navigation }) => {
             >
                 <ScrollView
                     style={styles.scrollView}
-                    contentContainerStyle={styles.scrollContent}
+                    contentContainerStyle={[styles.scrollContent, { padding: padding.md }]}
                     keyboardShouldPersistTaps="handled"
                 >
                     {/* Header */}
-                    <View style={styles.header}>
+                    <View style={[styles.header, { marginBottom: padding.lg }]}>
                         <TouchableOpacity
                             onPress={() => navigation.goBack()}
                             style={styles.backButton}
                         >
-                            <Text style={styles.backButtonText}>← Retour</Text>
+                            <Text style={[styles.backButtonText, { fontSize: fontSize.md }]}>← Retour</Text>
                         </TouchableOpacity>
 
-                        <Text style={styles.title}>💬 Ton avis compte !</Text>
-                        <Text style={styles.subtitle}>
+                        <Text style={[styles.title, { fontSize: fontSize.xxxl, marginBottom: padding.xs }]}>💬 Ton avis compte !</Text>
+                        <Text style={[styles.subtitle, { fontSize: fontSize.md }]}>
                             Aide-nous à améliorer Athlium en partageant ton feedback
                         </Text>
                     </View>
 
                     {/* Type de feedback */}
-                    <View style={styles.section}>
-                        <Text style={styles.label}>Type de feedback</Text>
+                    <View style={[styles.section, { marginBottom: padding.lg }]}>
+                        <Text style={[styles.label, { fontSize: fontSize.md, marginBottom: padding.xs }]}>Type de feedback</Text>
                         <View style={styles.typeContainer}>
                             {feedbackTypes.map((item) => (
                                 <TouchableOpacity
                                     key={item.id}
                                     style={[
                                         styles.typeButton,
+                                        { padding: padding.sm },
                                         type === item.id && styles.typeButtonActive
                                     ]}
                                     onPress={() => setType(item.id)}
@@ -125,12 +128,14 @@ const FeedbackScreen = ({ navigation }) => {
                                 >
                                     <Text style={[
                                         styles.typeLabel,
+                                        { fontSize: fontSize.md, marginBottom: 4 },
                                         type === item.id && styles.typeLabelActive
                                     ]}>
                                         {item.label}
                                     </Text>
                                     <Text style={[
                                         styles.typeDescription,
+                                        { fontSize: fontSize.sm },
                                         type === item.id && styles.typeDescriptionActive
                                     ]}>
                                         {item.description}
@@ -141,12 +146,12 @@ const FeedbackScreen = ({ navigation }) => {
                     </View>
 
                     {/* Message (requis) */}
-                    <View style={styles.section}>
-                        <Text style={styles.label}>
+                    <View style={[styles.section, { marginBottom: padding.lg }]}>
+                        <Text style={[styles.label, { fontSize: fontSize.md, marginBottom: padding.xs }]}>
                             Message <Text style={styles.required}>*</Text>
                         </Text>
                         <TextInput
-                            style={styles.textArea}
+                            style={[styles.textArea, { padding: padding.sm, fontSize: fontSize.md }]}
                             placeholder="Décris ton bug, suggestion ou commentaire..."
                             placeholderTextColor={COLORS.textSecondary}
                             value={message}
@@ -155,16 +160,16 @@ const FeedbackScreen = ({ navigation }) => {
                             numberOfLines={6}
                             maxLength={1000}
                         />
-                        <Text style={styles.charCount}>
+                        <Text style={[styles.charCount, { fontSize: fontSize.xs }]}>
                             {message.length} / 1000 caractères
                         </Text>
                     </View>
 
                     {/* Nom (optionnel) */}
-                    <View style={styles.section}>
-                        <Text style={styles.label}>Nom (optionnel)</Text>
+                    <View style={[styles.section, { marginBottom: padding.lg }]}>
+                        <Text style={[styles.label, { fontSize: fontSize.md, marginBottom: padding.xs }]}>Nom (optionnel)</Text>
                         <TextInput
-                            style={styles.input}
+                            style={[styles.input, { padding: padding.sm, fontSize: fontSize.md }]}
                             placeholder="Ton prénom ou pseudo"
                             placeholderTextColor={COLORS.textSecondary}
                             value={name}
@@ -174,10 +179,10 @@ const FeedbackScreen = ({ navigation }) => {
                     </View>
 
                     {/* Email (optionnel) */}
-                    <View style={styles.section}>
-                        <Text style={styles.label}>Email (optionnel)</Text>
+                    <View style={[styles.section, { marginBottom: padding.lg }]}>
+                        <Text style={[styles.label, { fontSize: fontSize.md, marginBottom: padding.xs }]}>Email (optionnel)</Text>
                         <TextInput
-                            style={styles.input}
+                            style={[styles.input, { padding: padding.sm, fontSize: fontSize.md }]}
                             placeholder="ton@email.com"
                             placeholderTextColor={COLORS.textSecondary}
                             value={email}
@@ -186,7 +191,7 @@ const FeedbackScreen = ({ navigation }) => {
                             autoCapitalize="none"
                             maxLength={100}
                         />
-                        <Text style={styles.hint}>
+                        <Text style={[styles.hint, { fontSize: fontSize.xs }]}>
                             Pour qu'on puisse te répondre 💬
                         </Text>
                     </View>
@@ -195,6 +200,7 @@ const FeedbackScreen = ({ navigation }) => {
                     <TouchableOpacity
                         style={[
                             styles.submitButton,
+                            { padding: padding.lg },
                             loading && styles.submitButtonDisabled
                         ]}
                         onPress={handleSubmit}
@@ -204,14 +210,14 @@ const FeedbackScreen = ({ navigation }) => {
                         {loading ? (
                             <ActivityIndicator color={COLORS.text} />
                         ) : (
-                            <Text style={styles.submitButtonText}>
+                            <Text style={[styles.submitButtonText, { fontSize: fontSize.lg }]}>
                                 ✉️ Envoyer le feedback
                             </Text>
                         )}
                     </TouchableOpacity>
 
                     {/* Note de confidentialité */}
-                    <Text style={styles.privacy}>
+                    <Text style={[styles.privacy, { fontSize: fontSize.xs, marginTop: padding.md }]}>
                         🔒 Ton feedback est anonyme. On ne partage jamais tes données.
                     </Text>
 
@@ -235,38 +241,34 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     scrollContent: {
-        padding: 20,
+        // padding géré dynamiquement
     },
     header: {
-        marginBottom: 30,
+        // marginBottom géré dynamiquement
     },
     backButton: {
         marginBottom: 20,
     },
     backButtonText: {
-        fontSize: 16,
         color: COLORS.accent,
         fontWeight: '600',
     },
     title: {
-        fontSize: 32,
         fontWeight: 'bold',
         color: COLORS.text,
-        marginBottom: 10,
+        // marginBottom géré dynamiquement
     },
     subtitle: {
-        fontSize: 16,
         color: COLORS.textSecondary,
         lineHeight: 22,
     },
     section: {
-        marginBottom: 25,
+        // marginBottom géré dynamiquement
     },
     label: {
-        fontSize: 16,
         fontWeight: 'bold',
         color: COLORS.text,
-        marginBottom: 10,
+        // marginBottom géré dynamiquement
     },
     required: {
         color: COLORS.error,
@@ -276,7 +278,6 @@ const styles = StyleSheet.create({
     },
     typeButton: {
         backgroundColor: COLORS.backgroundCard,
-        padding: 15,
         borderRadius: 12,
         borderWidth: 2,
         borderColor: COLORS.backgroundCard,
@@ -286,16 +287,13 @@ const styles = StyleSheet.create({
         backgroundColor: COLORS.primaryDark,
     },
     typeLabel: {
-        fontSize: 16,
         fontWeight: 'bold',
         color: COLORS.text,
-        marginBottom: 4,
     },
     typeLabelActive: {
         color: COLORS.accent,
     },
     typeDescription: {
-        fontSize: 13,
         color: COLORS.textSecondary,
     },
     typeDescriptionActive: {
@@ -306,8 +304,6 @@ const styles = StyleSheet.create({
         borderWidth: 2,
         borderColor: COLORS.backgroundCard,
         borderRadius: 12,
-        padding: 15,
-        fontSize: 16,
         color: COLORS.text,
     },
     textArea: {
@@ -315,27 +311,22 @@ const styles = StyleSheet.create({
         borderWidth: 2,
         borderColor: COLORS.backgroundCard,
         borderRadius: 12,
-        padding: 15,
-        fontSize: 16,
         color: COLORS.text,
         minHeight: 150,
         textAlignVertical: 'top',
     },
     charCount: {
-        fontSize: 12,
         color: COLORS.textSecondary,
         textAlign: 'right',
         marginTop: 5,
     },
     hint: {
-        fontSize: 12,
         color: COLORS.textSecondary,
         marginTop: 5,
     },
     submitButton: {
         backgroundColor: COLORS.primary,
         borderRadius: 12,
-        padding: 18,
         alignItems: 'center',
         borderWidth: 2,
         borderColor: COLORS.accent,
@@ -345,15 +336,12 @@ const styles = StyleSheet.create({
         opacity: 0.6,
     },
     submitButtonText: {
-        fontSize: 18,
         fontWeight: 'bold',
         color: COLORS.text,
     },
     privacy: {
-        fontSize: 12,
         color: COLORS.textSecondary,
         textAlign: 'center',
-        marginTop: 20,
         fontStyle: 'italic',
     },
 });

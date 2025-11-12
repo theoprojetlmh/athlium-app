@@ -1,5 +1,6 @@
+// components/ModelViewer.js
 import React, { useState, useRef, useEffect } from 'react';
-import { View, StyleSheet, ActivityIndicator, Text, PixelRatio, TouchableOpacity, PanResponder, Alert } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, Text, PixelRatio, TouchableOpacity, PanResponder } from 'react-native';
 import { GLView } from 'expo-gl';
 import { Renderer } from 'expo-three';
 import * as THREE from 'three';
@@ -113,7 +114,7 @@ const ModelViewer = ({ navigation }) => {
         }
 
         mesh.material = mesh.userData.highlightMaterial;
-        mesh.material.emissive = new THREE.Color(0x50FA7B);
+        mesh.material.emissive = new THREE.Color(0x7C3AED);
         mesh.material.emissiveIntensity = 0.5;
 
         selectedMeshRef.current = mesh;
@@ -143,10 +144,12 @@ const ModelViewer = ({ navigation }) => {
     const panResponder = useRef(
         PanResponder.create({
             onStartShouldSetPanResponder: () => true,
-            onMoveShouldSetPanResponder: () => true,
+            onMoveShouldSetPanResponder: () => true, // TOUJOURS accepter
 
             onPanResponderGrant: (evt, gestureState) => {
                 const touches = evt.nativeEvent.touches;
+
+                console.log('🎯 GRANT - touches:', touches.length);
 
                 if (touches.length === 1) {
                     savedRotation.current = {
@@ -154,15 +157,20 @@ const ModelViewer = ({ navigation }) => {
                         y: rotationRef.current.targetY
                     };
                 } else if (touches.length === 2) {
-                    savedScale.current = cameraZRef.current.target;
+                    // IMPORTANT : On sauvegarde la position ACTUELLE de la caméra
+                    savedScale.current = cameraZRef.current.current;
                     savedPan.current = {
-                        x: panRef.current.targetX,
-                        y: panRef.current.targetY
+                        x: panRef.current.x,
+                        y: panRef.current.y
                     };
 
                     const dx = touches[0].pageX - touches[1].pageX;
                     const dy = touches[0].pageY - touches[1].pageY;
                     initialDistance.current = Math.sqrt(dx * dx + dy * dy);
+
+                    console.log('🎯 GRANT - 2 doigts posés');
+                    console.log('  savedScale:', savedScale.current);
+                    console.log('  initialDistance:', initialDistance.current);
                 }
             },
 
@@ -170,18 +178,50 @@ const ModelViewer = ({ navigation }) => {
                 const touches = evt.nativeEvent.touches;
 
                 if (touches.length === 1) {
+                    // Rotation avec un doigt
                     rotationRef.current.targetY = savedRotation.current.y + gestureState.dx * 0.01;
                     rotationRef.current.targetX = savedRotation.current.x - gestureState.dy * 0.01;
                     rotationRef.current.targetX = Math.max(-Math.PI / 2.5, Math.min(Math.PI / 2.5, rotationRef.current.targetX));
                 } else if (touches.length === 2) {
+                    // Pinch to zoom avec deux doigts
                     const dx = touches[0].pageX - touches[1].pageX;
                     const dy = touches[0].pageY - touches[1].pageY;
-                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    const currentDistance = Math.sqrt(dx * dx + dy * dy);
 
-                    const scale = initialDistance.current / distance;
-                    const newZ = savedScale.current * scale;
-                    cameraZRef.current.target = Math.max(2, Math.min(8, newZ));
+                    // CRITIQUE : Si initialDistance pas encore initialisé
+                    // (Move appelé avant Grant), initialiser maintenant !
+                    if (initialDistance.current === 0) {
+                        initialDistance.current = currentDistance;
+                        savedScale.current = cameraZRef.current.current;
+                        savedPan.current = {
+                            x: panRef.current.x,
+                            y: panRef.current.y
+                        };
+                        console.log('🔧 INIT dans MOVE');
+                        console.log('  initialDistance:', initialDistance.current);
+                        console.log('  savedScale:', savedScale.current);
+                        return; // Skip ce frame
+                    }
 
+                    // Ratio de zoom basé sur la distance actuelle vs initiale
+                    const zoomRatio = currentDistance / initialDistance.current;
+
+                    console.log('📏 MOVE - Calcul zoom');
+                    console.log('  currentDistance:', currentDistance);
+                    console.log('  initialDistance:', initialDistance.current);
+                    console.log('  zoomRatio:', zoomRatio);
+                    console.log('  savedScale:', savedScale.current);
+
+                    // ZONE MORTE : Ignorer les micro-variations (±5%)
+                    if (Math.abs(zoomRatio - 1.0) > 0.05) {
+                        const newZ = savedScale.current / zoomRatio;
+                        console.log('  ✅ ZOOM APPLIQUÉ - newZ:', newZ);
+                        cameraZRef.current.target = Math.max(2, Math.min(8, newZ));
+                    } else {
+                        console.log('  ⏸️ ZONE MORTE - pas de zoom');
+                    }
+
+                    // Pan avec deux doigts
                     panRef.current.targetX = savedPan.current.x + gestureState.dx * 0.003;
                     panRef.current.targetY = savedPan.current.y - gestureState.dy * 0.003;
                     panRef.current.targetX = Math.max(-2, Math.min(2, panRef.current.targetX));
@@ -192,7 +232,11 @@ const ModelViewer = ({ navigation }) => {
             onPanResponderRelease: (evt, gestureState) => {
                 const touches = evt.nativeEvent.changedTouches;
 
-                if (touches.length === 1 && Math.abs(gestureState.dx) < 10 && Math.abs(gestureState.dy) < 10) {
+                // ✅ AJOUTE CETTE LIGNE ICI
+                initialDistance.current = 0;
+
+                // Tap ultra-réactif : seuil à 3px
+                if (touches.length === 1 && Math.abs(gestureState.dx) < 3 && Math.abs(gestureState.dy) < 3) {
                     if (glViewRef.current) {
                         glViewRef.current.measure((x, y, width, height, pageX, pageY) => {
                             const touchX = touches[0].pageX;
@@ -216,9 +260,14 @@ const ModelViewer = ({ navigation }) => {
                 height: gl.drawingBufferHeight
             };
 
-            rendererRef.current = new Renderer({ gl });
+            // 🔧 CORRECTION 1 : Activer le canal alpha pour la transparence
+            rendererRef.current = new Renderer({
+                gl,
+                alpha: true  // ⭐ Permet la transparence !
+            });
             rendererRef.current.setSize(glDimensionsRef.current.width, glDimensionsRef.current.height);
-            rendererRef.current.setClearColor(0x1E1E1E, 1);
+            // 🔧 CORRECTION 2 : Fond transparent au lieu de gris opaque
+            rendererRef.current.setClearColor(0x000000, 0);  // Noir transparent (opacité = 0)
 
             sceneRef.current = new THREE.Scene();
 
@@ -238,28 +287,10 @@ const ModelViewer = ({ navigation }) => {
             dirLight.position.set(5, 10, 5);
             sceneRef.current.add(dirLight);
 
-            // PROTECTION : Vérifier que le fichier existe
-            let asset;
-            try {
-                asset = Asset.fromModule(require('../assets/body-model.glb'));
-                if (!asset) {
-                    throw new Error('Fichier body-model.glb introuvable');
-                }
-                await asset.downloadAsync();
-            } catch (assetError) {
-                console.error('❌ Erreur chargement asset:', assetError);
-                throw new Error('Le fichier du modèle 3D est manquant. Ajoute body-model.glb dans le dossier assets/');
-            }
+            const asset = Asset.fromModule(require('../assets/body-model.glb'));
+            await asset.downloadAsync();
 
-            // PROTECTION : Vérifier que l'URI est valide
-            const uri = asset.uri || asset.localUri;
-            if (!uri || uri === 'undefined' || uri.trim() === '') {
-                throw new Error('URI du modèle 3D invalide');
-            }
-
-            console.log('✅ Chargement du modèle depuis:', uri);
-
-            const loadedModel = await loadAsync(uri);
+            const loadedModel = await loadAsync(asset.uri || asset.localUri);
 
             modelGroupRef.current = new THREE.Group();
             sceneRef.current.add(modelGroupRef.current);
@@ -280,7 +311,7 @@ const ModelViewer = ({ navigation }) => {
             modelRef.current.updateMatrixWorld(true);
             modelGroupRef.current.position.set(0, 0, 0);
 
-            rotationRef.current = { x: 0, y: 0, targetX: 0, targetY: 0 };
+            rotationRef.current.targetY = rotationRef.current.y = 0;
             modelGroupRef.current.rotation.y = 0;
 
             muscleMeshesRef.current = {};
@@ -329,12 +360,26 @@ const ModelViewer = ({ navigation }) => {
 
     return (
         <View style={styles.container}>
+            {/* ✨ Gradient de fond premium - VERSION TEST TRÈS VISIBLE */}
+            <LinearGradient
+                colors={['#0E0E14', '#2D1B4E', '#0E0E14']}
+                start={{ x: 0.5, y: 0 }}
+                end={{ x: 0.5, y: 1 }}
+                style={StyleSheet.absoluteFill}
+            />
+
+            {/* Effet vignette (assombrit les bords) */}
+            <View style={styles.vignette} />
+
+            {/* Loading */}
             {loading && (
                 <View style={styles.overlay}>
                     <ActivityIndicator size="large" color={COLORS.accent} />
                     <Text style={styles.loadingText}>Chargement du modèle 3D...</Text>
                 </View>
             )}
+
+            {/* Erreur */}
             {error && (
                 <View style={styles.overlay}>
                     <Text style={styles.errorIcon}>⚠️</Text>
@@ -345,7 +390,6 @@ const ModelViewer = ({ navigation }) => {
                         onPress={() => {
                             setError(null);
                             setLoading(true);
-                            // Recharger
                             setTimeout(() => {
                                 navigation.replace('Home');
                             }, 100);
@@ -356,6 +400,7 @@ const ModelViewer = ({ navigation }) => {
                 </View>
             )}
 
+            {/* GLView */}
             {!error && (
                 <View
                     ref={glViewRef}
@@ -366,6 +411,7 @@ const ModelViewer = ({ navigation }) => {
                 </View>
             )}
 
+            {/* Info muscle sélectionné */}
             {selectedMuscle && !error && (
                 <View style={styles.muscleInfoOuterGlow}>
                     <View style={styles.muscleInfoInnerGlow}>
@@ -379,12 +425,19 @@ const ModelViewer = ({ navigation }) => {
                                 💪 {selectedMuscle.replace(/-/g, ' ').toUpperCase()}
                             </Text>
                             <TouchableOpacity
-                                style={styles.viewExercisesButton}
                                 onPress={() => navigateToExercises(selectedMuscle)}
+                                activeOpacity={0.8}
                             >
-                                <Text style={styles.viewExercisesButtonText}>
-                                    Voir les exercices →
-                                </Text>
+                                <LinearGradient
+                                    colors={['#8B5CF6', '#7C3AED', '#6D28D9']}
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 0, y: 1 }}
+                                    style={styles.viewExercisesButton}
+                                >
+                                    <Text style={styles.viewExercisesButtonText}>
+                                        Voir les exercices →
+                                    </Text>
+                                </LinearGradient>
                             </TouchableOpacity>
                         </LinearGradient>
                     </View>
@@ -397,10 +450,11 @@ const ModelViewer = ({ navigation }) => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: COLORS.background
+        backgroundColor: 'transparent'  // ✅ TRANSPARENT pour voir le gradient !
     },
     glView: {
-        flex: 1
+        flex: 1,
+        backgroundColor: 'transparent',  // Transparent pour voir le gradient
     },
     overlay: {
         ...StyleSheet.absoluteFillObject,
@@ -470,10 +524,8 @@ const styles = StyleSheet.create({
     },
     muscleInfo: {
         padding: 18,
-        borderRadius: 15,
+        borderRadius: 16,
         overflow: 'hidden',
-        borderWidth: 1,
-        borderColor: 'rgba(80, 250, 123, 0.3)',
     },
     muscleInfoText: {
         color: COLORS.text,
@@ -486,17 +538,16 @@ const styles = StyleSheet.create({
         textShadowRadius: 10,
     },
     viewExercisesButton: {
-        backgroundColor: COLORS.secondary,
-        borderRadius: 10,
-        paddingVertical: 12,
-        paddingHorizontal: 20,
+        borderRadius: 12,
+        paddingVertical: 14,
+        paddingHorizontal: 24,
         marginTop: 12,
         alignItems: 'center',
-        shadowColor: COLORS.secondary,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.6,
-        shadowRadius: 10,
-        elevation: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.45,
+        shadowRadius: 12,
+        elevation: 12,
     },
     viewExercisesButtonText: {
         color: '#ffffff',
@@ -505,6 +556,15 @@ const styles = StyleSheet.create({
         textShadowColor: 'rgba(0, 0, 0, 0.5)',
         textShadowOffset: { width: 0, height: 1 },
         textShadowRadius: 3,
+    },
+    vignette: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'transparent',
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.6,
+        shadowRadius: 80,
+        pointerEvents: 'none',
     },
 });
 
