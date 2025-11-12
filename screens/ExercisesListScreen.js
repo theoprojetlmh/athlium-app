@@ -3,8 +3,10 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { COLORS } from '../constants/colors';
+import { useResponsive } from '../hooks/useResponsive';
 
 const ExercisesListScreen = ({ route, navigation }) => {
+    const { fontSize, padding, scale } = useResponsive();
     const { category, muscle, muscleName } = route.params;
     const [allExercises, setAllExercises] = useState([]);
     const [filteredExercises, setFilteredExercises] = useState([]);
@@ -149,26 +151,26 @@ const ExercisesListScreen = ({ route, navigation }) => {
                         />
                     ) : (
                         <View style={styles.imagePlaceholder}>
-                            <Text style={styles.placeholderIcon}>💪</Text>
-                            <Text style={styles.placeholderText}>Bientôt disponible</Text>
+                            <Text style={[styles.placeholderIcon, { fontSize: scale(40) }]}>💪</Text>
+                            <Text style={[styles.placeholderText, { fontSize: fontSize.xs }]}>Bientôt disponible</Text>
                         </View>
                     )}
                 </View>
 
                 {/* Barre d'infos en bas */}
-                <View style={styles.infoBar}>
-                    <Text style={styles.exerciseName} numberOfLines={2}>
+                <View style={[styles.infoBar, { padding: padding.xs }]}>
+                    <Text style={[styles.exerciseName, { fontSize: fontSize.sm }]} numberOfLines={2}>
                         {item.name}
                     </Text>
 
                     <View style={styles.detailsRow}>
                         <View style={styles.difficultyBadge}>
-                            <Text style={[styles.difficultyText, { color: difficultyInfo.color }]}>
+                            <Text style={[styles.difficultyText, { color: difficultyInfo.color, fontSize: fontSize.xs }]}>
                                 {difficultyInfo.stars}
                             </Text>
                         </View>
 
-                        <Text style={styles.categoryText} numberOfLines={1}>
+                        <Text style={[styles.categoryText, { fontSize: fontSize.xs }]} numberOfLines={1}>
                             {categoryLabel}
                         </Text>
                     </View>
@@ -181,28 +183,28 @@ const ExercisesListScreen = ({ route, navigation }) => {
         return (
             <View style={styles.centered}>
                 <ActivityIndicator size="large" color={COLORS.accent} />
-                <Text style={styles.loadingText}>Chargement des exercices...</Text>
+                <Text style={[styles.loadingText, { fontSize: fontSize.md }]}>Chargement des exercices...</Text>
             </View>
         );
     }
 
     return (
         <SafeAreaView style={styles.container}>
-            <View style={styles.header}>
+            <View style={[styles.header, { padding: padding.md }]}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                    <Text style={styles.backButtonText}>← Retour</Text>
+                    <Text style={[styles.backButtonText, { fontSize: fontSize.md }]}>← Retour</Text>
                 </TouchableOpacity>
-                <Text style={styles.title}>{getTitle()}</Text>
+                <Text style={[styles.title, { fontSize: fontSize.xxxl }]}>{getTitle()}</Text>
 
                 <View style={styles.headerRow}>
-                    <Text style={styles.count}>
+                    <Text style={[styles.count, { fontSize: fontSize.sm }]}>
                         {filteredExercises.length} exercice{filteredExercises.length > 1 ? 's' : ''}
                     </Text>
 
                     {/* Bouton Exercice Aléatoire */}
                     {filteredExercises.length > 0 && (
                         <TouchableOpacity
-                            style={styles.randomButton}
+                            style={[styles.randomButton, { paddingHorizontal: padding.sm, paddingVertical: padding.xs }]}
                             onPress={() => {
                                 const randomIndex = Math.floor(Math.random() * filteredExercises.length);
                                 const randomExercise = filteredExercises[randomIndex];
@@ -210,24 +212,24 @@ const ExercisesListScreen = ({ route, navigation }) => {
                             }}
                             activeOpacity={0.7}
                         >
-                            <Text style={styles.randomButtonIcon}>🎲</Text>
-                            <Text style={styles.randomButtonText}>Aléatoire</Text>
+                            <Text style={[styles.randomButtonIcon, { fontSize: fontSize.lg }]}>🎲</Text>
+                            <Text style={[styles.randomButtonText, { fontSize: fontSize.sm }]}>Aléatoire</Text>
                         </TouchableOpacity>
                     )}
                 </View>
 
                 {/* Menu déroulant de filtres */}
                 {muscle && (
-                    <View style={styles.filterContainer}>
+                    <View style={[styles.filterContainer, { marginTop: padding.sm }]}>
                         <TouchableOpacity
-                            style={styles.filterHeader}
+                            style={[styles.filterHeader, { padding: padding.sm }]}
                             onPress={() => setFilterMenuOpen(!filterMenuOpen)}
                             activeOpacity={0.7}
                         >
-                            <Text style={styles.filterHeaderText}>
+                            <Text style={[styles.filterHeaderText, { fontSize: fontSize.md }]}>
                                 Filtrer : {categoryTitles[selectedFilter]}
                             </Text>
-                            <Text style={styles.filterHeaderIcon}>
+                            <Text style={[styles.filterHeaderIcon, { fontSize: fontSize.sm }]}>
                                 {filterMenuOpen ? '▲' : '▼'}
                             </Text>
                         </TouchableOpacity>
@@ -241,27 +243,31 @@ const ExercisesListScreen = ({ route, navigation }) => {
                                             key={key}
                                             style={[
                                                 styles.filterOption,
+                                                { padding: padding.sm },
                                                 selectedFilter === key && styles.filterOptionSelected
                                             ]}
                                             onPress={() => handleFilterSelect(key)}
                                             activeOpacity={0.7}
                                         >
-                                            <Text style={styles.filterOptionIcon}>
+                                            <Text style={[styles.filterOptionIcon, { fontSize: fontSize.xl }]}>
                                                 {categoryIcons[key]}
                                             </Text>
+
                                             <View style={styles.filterOptionContent}>
                                                 <Text style={[
                                                     styles.filterOptionText,
+                                                    { fontSize: fontSize.md },
                                                     selectedFilter === key && styles.filterOptionTextSelected
                                                 ]}>
                                                     {label}
                                                 </Text>
-                                                <Text style={styles.filterOptionCount}>
+                                                <Text style={[styles.filterOptionCount, { fontSize: fontSize.xs }]}>
                                                     {count} exercice{count > 1 ? 's' : ''}
                                                 </Text>
                                             </View>
+
                                             {selectedFilter === key && (
-                                                <Text style={styles.checkmark}>✓</Text>
+                                                <Text style={[styles.checkmark, { fontSize: fontSize.lg }]}>✓</Text>
                                             )}
                                         </TouchableOpacity>
                                     );
@@ -274,19 +280,14 @@ const ExercisesListScreen = ({ route, navigation }) => {
 
             {filteredExercises.length === 0 ? (
                 <View style={styles.centered}>
-                    <Text style={styles.emptyIcon}>🔭</Text>
-                    <Text style={styles.emptyText}>
-                        {selectedFilter === 'all'
-                            ? 'Aucun exercice disponible'
-                            : 'Aucun exercice dans ce filtre'
-                        }
-                    </Text>
-                    {selectedFilter !== 'all' && (
+                    <Text style={[styles.emptyIcon, { fontSize: scale(60) }]}>🤷</Text>
+                    <Text style={[styles.emptyText, { fontSize: fontSize.lg }]}>Aucun exercice trouvé</Text>
+                    {muscle && (
                         <TouchableOpacity
-                            style={styles.resetButton}
+                            style={[styles.resetButton, { paddingHorizontal: padding.md, paddingVertical: padding.xs }]}
                             onPress={() => setSelectedFilter('all')}
                         >
-                            <Text style={styles.resetButtonText}>Réinitialiser le filtre</Text>
+                            <Text style={[styles.resetButtonText, { fontSize: fontSize.sm }]}>Voir tous les exercices</Text>
                         </TouchableOpacity>
                     )}
                 </View>
@@ -296,7 +297,7 @@ const ExercisesListScreen = ({ route, navigation }) => {
                     renderItem={renderExercise}
                     keyExtractor={(item) => item.id}
                     numColumns={2}
-                    contentContainerStyle={styles.list}
+                    contentContainerStyle={[styles.list, { padding: padding.xs }]}
                     columnWrapperStyle={styles.row}
                 />
             )}
@@ -316,7 +317,6 @@ const styles = StyleSheet.create({
         padding: 20,
     },
     header: {
-        padding: 20,
         borderBottomWidth: 1,
         borderBottomColor: COLORS.backgroundCard,
     },
@@ -324,18 +324,15 @@ const styles = StyleSheet.create({
         marginBottom: 15,
     },
     backButtonText: {
-        fontSize: 16,
         color: COLORS.accent,
         fontWeight: '600',
     },
     title: {
-        fontSize: 28,
         fontWeight: 'bold',
         color: COLORS.text,
         marginBottom: 8,
     },
     count: {
-        fontSize: 14,
         color: COLORS.textSecondary,
     },
     headerRow: {
@@ -348,23 +345,19 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: COLORS.primary,
-        paddingHorizontal: 15,
-        paddingVertical: 8,
         borderRadius: 20,
         borderWidth: 2,
         borderColor: COLORS.accent,
     },
     randomButtonIcon: {
-        fontSize: 18,
         marginRight: 6,
     },
     randomButtonText: {
         color: COLORS.text,
-        fontSize: 14,
         fontWeight: 'bold',
     },
     list: {
-        padding: 10,
+        // padding géré dynamiquement
     },
     row: {
         justifyContent: 'space-between',
@@ -405,20 +398,16 @@ const styles = StyleSheet.create({
         backgroundColor: COLORS.primaryDark,
     },
     placeholderIcon: {
-        fontSize: 40,
         marginBottom: 5,
     },
     placeholderText: {
         color: COLORS.textSecondary,
-        fontSize: 11,
         textAlign: 'center',
     },
     infoBar: {
-        padding: 12,
         backgroundColor: COLORS.backgroundCard,
     },
     exerciseName: {
-        fontSize: 14,
         fontWeight: 'bold',
         color: COLORS.text,
         marginBottom: 8,
@@ -434,11 +423,9 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     difficultyText: {
-        fontSize: 12,
         fontWeight: '600',
     },
     categoryText: {
-        fontSize: 11,
         color: COLORS.textSecondary,
         fontWeight: '500',
         maxWidth: '60%',
@@ -446,15 +433,12 @@ const styles = StyleSheet.create({
     loadingText: {
         color: COLORS.text,
         marginTop: 10,
-        fontSize: 16,
     },
     emptyIcon: {
-        fontSize: 60,
         marginBottom: 20,
     },
     emptyText: {
         color: COLORS.text,
-        fontSize: 18,
         fontWeight: 'bold',
         marginBottom: 8,
         textAlign: 'center',
@@ -462,36 +446,30 @@ const styles = StyleSheet.create({
     resetButton: {
         marginTop: 15,
         backgroundColor: COLORS.primary,
-        paddingHorizontal: 20,
-        paddingVertical: 10,
         borderRadius: 8,
     },
     resetButtonText: {
         color: COLORS.text,
-        fontSize: 14,
         fontWeight: 'bold',
     },
     // Styles menu déroulant
     filterContainer: {
-        marginTop: 15,
+        // marginTop géré dynamiquement
     },
     filterHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         backgroundColor: COLORS.backgroundCard,
-        padding: 15,
         borderRadius: 12,
         borderWidth: 2,
         borderColor: COLORS.primary,
     },
     filterHeaderText: {
-        fontSize: 16,
         fontWeight: 'bold',
         color: COLORS.text,
     },
     filterHeaderIcon: {
-        fontSize: 14,
         color: COLORS.accent,
         fontWeight: 'bold',
     },
@@ -506,7 +484,6 @@ const styles = StyleSheet.create({
     filterOption: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 15,
         borderBottomWidth: 1,
         borderBottomColor: COLORS.background,
     },
@@ -514,14 +491,12 @@ const styles = StyleSheet.create({
         backgroundColor: COLORS.primaryDark,
     },
     filterOptionIcon: {
-        fontSize: 20,
         marginRight: 12,
     },
     filterOptionContent: {
         flex: 1,
     },
     filterOptionText: {
-        fontSize: 15,
         color: COLORS.text,
         fontWeight: '500',
     },
@@ -530,12 +505,10 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
     },
     filterOptionCount: {
-        fontSize: 12,
         color: COLORS.textSecondary,
         marginTop: 2,
     },
     checkmark: {
-        fontSize: 18,
         color: COLORS.accent,
         fontWeight: 'bold',
     },

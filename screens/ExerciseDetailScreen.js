@@ -3,8 +3,10 @@ import { View, Text, StyleSheet, ScrollView, Image, ActivityIndicator, Touchable
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { COLORS } from '../constants/colors';
+import { useResponsive } from '../hooks/useResponsive';
 
 const ExerciseDetailScreen = ({ route, navigation }) => {
+    const { fontSize, padding, scale } = useResponsive();
     const { exerciseId } = route.params || {};
     const [exercise, setExercise] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -71,7 +73,7 @@ const ExerciseDetailScreen = ({ route, navigation }) => {
             <SafeAreaView style={styles.container}>
                 <View style={styles.centered}>
                     <ActivityIndicator size="large" color={COLORS.accent} />
-                    <Text style={styles.loadingText}>Chargement de l'exercice...</Text>
+                    <Text style={[styles.loadingText, { fontSize: fontSize.md }]}>Chargement de l'exercice...</Text>
                 </View>
             </SafeAreaView>
         );
@@ -81,13 +83,13 @@ const ExerciseDetailScreen = ({ route, navigation }) => {
         return (
             <SafeAreaView style={styles.container}>
                 <View style={styles.centered}>
-                    <Text style={styles.errorIcon}>❌</Text>
-                    <Text style={styles.errorText}>{error || 'Exercice introuvable'}</Text>
+                    <Text style={[styles.errorIcon, { fontSize: scale(60) }]}>❌</Text>
+                    <Text style={[styles.errorText, { fontSize: fontSize.lg }]}>{error || 'Exercice introuvable'}</Text>
                     <TouchableOpacity
-                        style={styles.retryButton}
+                        style={[styles.retryButton, { paddingHorizontal: padding.lg, paddingVertical: padding.xs }]}
                         onPress={() => navigation.goBack()}
                     >
-                        <Text style={styles.retryButtonText}>← Retour</Text>
+                        <Text style={[styles.retryButtonText, { fontSize: fontSize.md }]}>← Retour</Text>
                     </TouchableOpacity>
                 </View>
             </SafeAreaView>
@@ -106,8 +108,8 @@ const ExerciseDetailScreen = ({ route, navigation }) => {
                             style={styles.video}
                             resizeMode="cover"
                         />
-                        <View style={styles.videoOverlay}>
-                            <Text style={styles.videoLabel}>🎥 Vidéo</Text>
+                        <View style={[styles.videoOverlay, { paddingHorizontal: padding.xs, paddingVertical: padding.xs / 2 }]}>
+                            <Text style={[styles.videoLabel, { fontSize: fontSize.xs }]}>🎥 Vidéo</Text>
                         </View>
                     </View>
                 ) : exercise.image_url ? (
@@ -120,8 +122,8 @@ const ExerciseDetailScreen = ({ route, navigation }) => {
                     </View>
                 ) : (
                     <View style={[styles.mediaContainer, styles.noMedia]}>
-                        <Text style={styles.noMediaIcon}>💪</Text>
-                        <Text style={styles.noMediaText}>Média bientôt disponible</Text>
+                        <Text style={[styles.noMediaIcon, { fontSize: scale(80) }]}>💪</Text>
+                        <Text style={[styles.noMediaText, { fontSize: fontSize.md }]}>Média bientôt disponible</Text>
                     </View>
                 )}
 
@@ -129,45 +131,45 @@ const ExerciseDetailScreen = ({ route, navigation }) => {
                     style={styles.backButton}
                     onPress={() => navigation.goBack()}
                 >
-                    <Text style={styles.backButtonText}>←</Text>
+                    <Text style={[styles.backButtonText, { fontSize: fontSize.xxl }]}>←</Text>
                 </TouchableOpacity>
 
-                <View style={styles.content}>
-                    <Text style={styles.title}>{exercise.name}</Text>
+                <View style={[styles.content, { padding: padding.md }]}>
+                    <Text style={[styles.title, { fontSize: fontSize.xxxl }]}>{exercise.name}</Text>
 
                     <View style={styles.tagsContainer}>
-                        <View style={[styles.tag, { borderColor: difficultyInfo.color }]}>
-                            <Text style={[styles.tagText, { color: difficultyInfo.color }]}>
+                        <View style={[styles.tag, { borderColor: difficultyInfo.color, paddingHorizontal: padding.sm, paddingVertical: padding.xs }]}>
+                            <Text style={[styles.tagText, { color: difficultyInfo.color, fontSize: fontSize.sm }]}>
                                 {difficultyInfo.stars} {difficultyInfo.text}
                             </Text>
                         </View>
 
                         {exercise.category && (
-                            <View style={styles.tag}>
-                                <Text style={styles.tagText}>
+                            <View style={[styles.tag, { paddingHorizontal: padding.sm, paddingVertical: padding.xs }]}>
+                                <Text style={[styles.tagText, { fontSize: fontSize.sm }]}>
                                     {getCategoryIcon(exercise.category)} {exercise.category}
                                 </Text>
                             </View>
                         )}
 
                         {exercise.equipment && (
-                            <View style={styles.tag}>
-                                <Text style={styles.tagText}>📦 {exercise.equipment}</Text>
+                            <View style={[styles.tag, { paddingHorizontal: padding.sm, paddingVertical: padding.xs }]}>
+                                <Text style={[styles.tagText, { fontSize: fontSize.sm }]}>📦 {exercise.equipment}</Text>
                             </View>
                         )}
                     </View>
 
                     {exercise.description && (
-                        <View style={styles.section}>
-                            <Text style={styles.sectionTitle}>📖 Description</Text>
-                            <Text style={styles.sectionText}>{exercise.description}</Text>
+                        <View style={[styles.section, { marginBottom: padding.lg }]}>
+                            <Text style={[styles.sectionTitle, { fontSize: fontSize.xl, marginBottom: padding.xs }]}>📖 Description</Text>
+                            <Text style={[styles.sectionText, { fontSize: fontSize.md }]}>{exercise.description}</Text>
                         </View>
                     )}
 
                     {exercise.instructions && exercise.instructions !== exercise.description && (
-                        <View style={styles.section}>
-                            <Text style={styles.sectionTitle}>📝 Instructions</Text>
-                            <Text style={styles.sectionText}>{exercise.instructions}</Text>
+                        <View style={[styles.section, { marginBottom: padding.lg }]}>
+                            <Text style={[styles.sectionTitle, { fontSize: fontSize.xl, marginBottom: padding.xs }]}>📝 Instructions</Text>
+                            <Text style={[styles.sectionText, { fontSize: fontSize.md }]}>{exercise.instructions}</Text>
                         </View>
                     )}
 
@@ -194,29 +196,23 @@ const styles = StyleSheet.create({
     },
     loadingText: {
         color: COLORS.text,
-        fontSize: 16,
         marginTop: 15,
     },
     errorIcon: {
-        fontSize: 60,
         marginBottom: 20,
     },
     errorText: {
         color: COLORS.error,
-        fontSize: 18,
         fontWeight: 'bold',
         textAlign: 'center',
         marginBottom: 20,
     },
     retryButton: {
         backgroundColor: COLORS.primary,
-        paddingHorizontal: 30,
-        paddingVertical: 12,
         borderRadius: 10,
     },
     retryButtonText: {
         color: COLORS.text,
-        fontSize: 16,
         fontWeight: 'bold',
     },
     mediaContainer: {
@@ -234,25 +230,20 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     noMediaIcon: {
-        fontSize: 80,
         marginBottom: 10,
     },
     noMediaText: {
         color: COLORS.textSecondary,
-        fontSize: 16,
     },
     videoOverlay: {
         position: 'absolute',
         top: 20,
         left: 20,
         backgroundColor: 'rgba(0, 0, 0, 0.7)',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
         borderRadius: 8,
     },
     videoLabel: {
         color: COLORS.text,
-        fontSize: 12,
         fontWeight: 'bold',
     },
     backButton: {
@@ -269,14 +260,12 @@ const styles = StyleSheet.create({
     },
     backButtonText: {
         color: COLORS.text,
-        fontSize: 24,
         fontWeight: 'bold',
     },
     content: {
-        padding: 20,
+        // padding géré dynamiquement
     },
     title: {
-        fontSize: 28,
         fontWeight: 'bold',
         color: COLORS.text,
         marginBottom: 15,
@@ -290,27 +279,22 @@ const styles = StyleSheet.create({
         borderWidth: 2,
         borderColor: COLORS.primary,
         borderRadius: 20,
-        paddingHorizontal: 15,
-        paddingVertical: 8,
         marginRight: 10,
         marginBottom: 10,
     },
     tagText: {
         color: COLORS.text,
-        fontSize: 14,
         fontWeight: '600',
     },
     section: {
-        marginBottom: 25,
+        // marginBottom géré dynamiquement
     },
     sectionTitle: {
-        fontSize: 20,
         fontWeight: 'bold',
         color: COLORS.accent,
-        marginBottom: 10,
+        // marginBottom géré dynamiquement
     },
     sectionText: {
-        fontSize: 16,
         color: COLORS.text,
         lineHeight: 24,
     },
